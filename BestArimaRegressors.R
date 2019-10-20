@@ -1,9 +1,9 @@
-BestArimaRegressors <- function(targetTr, targetTe, targetFo, regressorsTr, regressorsTe, regressorsFo){
+BestArimaRegressors <- function(targetTr, targetTe, targetFo, regressorsTr, regressorsTe, regressorsFo, ncores = 1){
 
   library(forecast)
   library(foreach)
-  library(MLmetrics)
-
+  library(doParallel)
+  
   Nregressors <- ncol(regressorsTr)
   argsGrid <- gsub(',$', '', paste0(rep('0:1,',Nregressors), collapse = ''))
   exprGrid <- paste0('expand.grid(', argsGrid, ')[-1,]')
@@ -20,11 +20,18 @@ BestArimaRegressors <- function(targetTr, targetTe, targetFo, regressorsTr, regr
     if (output == 'RMSE'){return(RMSE)} else {return(model)}
   }
   
-  RMSE <- numeric()
-  foreach(i = 1:nrow(Grid)) %do% {
-    RMSE[i] <- fit.model(targetTr, targetTe, regressorsTr, regressorsTe, Grid, i, 'RMSE')
+  if (ncores == 1){ 
+    RMSE <- foreach(i = 1:nrow(Grid)) %do% {fit.model(targetTr, targetTe, regressorsTr, regressorsTe, Grid, i, 'RMSE')}
+  }
+  else {
+    cl <- makeCluster(min(ncores, detectCores() - 1))
+    registerDoParallel(cl)
+    #clusterExport(cl = cl, c('forecast', 'auto.arima', 'fit.model'))
+    RMSE <- foreach(i = 1:nrow(Grid), .packages=c("forecast")) %dopar% {fit.model(targetTr, targetTe, regressorsTr, regressorsTe, Grid, i, 'RMSE')}
+    stopCluster(cl)
   }
   
+  RMSE = unlist(RMSE)  
   winner <- which(RMSE == min(RMSE))
   selected <- which(Grid[winner,] == T)
   
@@ -33,4 +40,3 @@ BestArimaRegressors <- function(targetTr, targetTe, targetFo, regressorsTr, regr
   predFo <- forecast(object = model, h = nrow(regFo), xreg = as.matrix(regressorsFo[, selected]))
   return(list(features = Grid[winner,], model = model, predTe = predTe, predFo = predFo))
 }
-
