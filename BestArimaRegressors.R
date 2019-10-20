@@ -26,7 +26,6 @@ BestArimaRegressors <- function(targetTr, targetTe, targetFo, regressorsTr, regr
   else {
     cl <- makeCluster(min(ncores, detectCores() - 1))
     registerDoParallel(cl)
-    #clusterExport(cl = cl, c('forecast', 'auto.arima', 'fit.model'))
     RMSE <- foreach(i = 1:nrow(Grid), .packages=c("forecast")) %dopar% {fit.model(targetTr, targetTe, regressorsTr, regressorsTe, Grid, i, 'RMSE')}
     stopCluster(cl)
   }
